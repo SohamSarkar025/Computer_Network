@@ -4,70 +4,106 @@
 
 //Client
 #include<stdio.h>
-#include<stdlib.h>
 #include<string.h>
 #include<sys/socket.h>
+#include<netinet/in.h>
 #include<arpa/inet.h>
 #include<unistd.h>
-#define CLIENT_IP "127.0.0.1"
-#define CLIENT_PORT 4000
-#define SERVER_IP "192.168.6.19"
-#define SERVER_PORT 5000
+
+#define SERVER_PORT 5550
+#define SERVER_IP "127.0.0.1"
+
 int main(){
- struct sockaddr_in client,server;
- int sd;
- char buf[100],str[100];
- bzero(&client,sizeof(client));
- client.sin_family=AF_INET;
- client.sin_port=htons(CLIENT_PORT);
- client.sin_addr.s_addr=inet_addr(CLIENT_IP);
- bzero(&server,sizeof(server));
- server.sin_family=AF_INET;
- server.sin_port=htons(SERVER_PORT);
- server.sin_addr.s_addr=inet_addr(SERVER_IP);
- sd=socket(AF_INET,SOCK_STREAM,0);
- bind(sd,(struct sockaddr*)&client,sizeof(client));
- while(1){
- printf("Enter the message to send to server: ");
- scanf("%s",buf);
- sendto(sd,buf,sizeof(buf),0,(struct sockaddr*)&server,sizeof(server));
- recvfrom(sd,str,sizeof(str),0,NULL,NULL);
- printf("Message from server: %s\n",str);
- if(strcmp(buf,"bye")==0)break;
- }
- close(sd);
- return 0;
+    struct sockaddr_in server;
+    char msg[512], msg1[512];
+    int sd, slen = sizeof(server);
+
+    // Setup server address
+    bzero((char*)&server, slen);
+    server.sin_family = AF_INET;
+    server.sin_port = htons(SERVER_PORT);
+    server.sin_addr.s_addr = inet_addr(SERVER_IP);
+
+    // Create socket
+    sd = socket(AF_INET, SOCK_STREAM, 0);
+
+    // No bind() needed for client
+    connect(sd, (struct sockaddr*)&server, slen);
+    memset(msg1, 0x0, 512);
+    recv(sd, msg1, 512, 0);
+    printf("\n%s\n", msg1);
+
+    do {
+        printf("\nEnter a message to the server: ");
+        fgets(msg, sizeof(msg), stdin);
+        msg[strcspn(msg, "\n")] = 0;
+
+        send(sd, msg, strlen(msg)+1, 0);
+
+        memset(msg1, 0x0, 512);
+        recv(sd, msg1, 512, 0);
+        printf("Message Received from Server: %s\n", msg1);
+    } while (strcmp(msg, "stop"));
+
+    close(sd);
+    return 0;
 }
 
 //Server
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <netinet/in.h>
-#include <unistd.h>
-#define SERVER_IP "192.168.5.19"
-#define SERVER_PORT 8070
+#include<stdio.h>
+#include<string.h>
+#include<sys/socket.h>
+#include<netinet/in.h>
+#include<arpa/inet.h>
+#include<unistd.h>
+
+#define SERVER_PORT 5550
+#define SERVER_IP "127.0.0.1"
+
 int main(){
- struct sockaddr_in server,client;
- int sd,newfd,len=sizeof(client);
- char tmp[512],buf[512];
- bzero(&server,sizeof(server));
- server.sin_family=AF_INET;
- server.sin_port=htons(SERVER_PORT);
- server.sin_addr.s_addr=inet_addr(SERVER_IP);
- sd=socket(AF_INET,SOCK_STREAM,0);
- bind(sd,(struct sockaddr*)&server,sizeof(server));
- listen(sd,3);
- while(1){
- newfd=accept(sd,(struct sockaddr*)&client,&len);
- read(newfd,buf,sizeof(buf));
- printf("From client: %s\n",buf);
- strcpy(tmp,"You have received : ");
- strcat(tmp,buf);
- write(newfd,tmp,strlen(tmp));
- close(newfd);
- }
- close(sd);
- return 0;
+    struct sockaddr_in client, server;
+    char msg[512], reply[512];
+    int sd, nsd;
+    socklen_t clen = sizeof(client);
+
+    // Set up server structure
+    bzero((char*)&server, sizeof(server));
+    server.sin_family = AF_INET;
+    server.sin_port = htons(SERVER_PORT);
+    server.sin_addr.s_addr = inet_addr(SERVER_IP);
+
+    // Create socket
+    sd = socket(AF_INET, SOCK_STREAM, 0);
+
+    // Bind to the server address
+    bind(sd, (struct sockaddr*)&server, sizeof(server));
+       
+    // Listen for connections
+    listen(sd, 5);
+    printf("Server is running and waiting for connections...\n");
+
+    while(1){
+        nsd = accept(sd, (struct sockaddr*)&client, &clen);
+
+        strcpy(reply, "Welcome to Chat Server!!");
+        send(nsd, reply, strlen(reply) + 1, 0);
+
+        do {
+            memset(msg, 0x0, 512);
+            recv(nsd, msg, 512, 0);
+            printf("Message Received: %s\n", msg);
+
+            printf("Enter Reply: ");
+            fgets(reply, sizeof(reply), stdin);
+            reply[strcspn(reply, "\n")] = 0;
+
+            send(nsd, reply, strlen(reply) + 1, 0);
+        } while (strcmp(msg, "stop") != 0);
+
+        close(nsd);
+        printf("Client disconnected.\n");
+    }
+
+    close(sd);
+    return 0;
 }
